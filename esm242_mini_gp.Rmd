@@ -121,3 +121,176 @@ Agenda for Nate:
 - Assumptions needed?
 
 
+DD Notes: Adding in another version that optimizes effort, and including a table function to visualize
+
+
+```{r}
+effort_fct = function(choice, int_state, p, c1, c2, r, K, period, q1, q2, discount) {
+  
+  state=vector(mode="numeric", length=0)
+  # yield=vector(mode="numeric", length=0)
+  benefits=vector(mode="numeric", length=0)
+  benefits_ssf=vector(mode="numeric", length=0)
+  benefits_dwf=vector(mode="numeric", length=0)
+  yield_ssf=vector(mode="numeric", length=0)
+  yield_dwf=vector(mode="numeric", length=0)
+  yield_total=vector(mode="numeric", length=0)
+  
+  rho=1/(1+discount)
+  
+  eff_matrix = matrix(choice, nrow=2, ncol=10)
+  
+  state[1]=int_state
+  
+  yield_ssf[1]=q1*state[1]*eff_matrix[1,1]
+  yield_dwf[1]=q2*state[1]*eff_matrix[2,1]
+  yield_total[1]=yield_ssf[1]+yield_dwf[1]
+  
+  benefits_ssf[1]=p*yield_ssf[1] - c1*(eff_matrix[1,1, drop=FALSE]^2)
+  benefits_dwf[1]=p*yield_dwf[1] - c2*(eff_matrix[2,1, drop=FALSE]^2)
+  benefits[1]=benefits_ssf[1]+benefits_dwf[1]
+  
+  for(i in 2:period){
+    state[i]=state[i-1] + (r*state[i-1]*(1-(state[i-1]/K))) - yield_total[i-1]
+    
+    yield_ssf[i]=q1*state[i]*eff_matrix[1,i]
+    benefits_ssf[i]=p*yield_ssf[i] - c1*(eff_matrix[1,i]^2)
+    
+    
+    yield_dwf[i]=q2*state[i]*eff_matrix[2,i]
+    benefits_dwf[i]=p*yield_dwf[i] - c2*(eff_matrix[2,i]^2)
+    
+    yield_total[i]=yield_ssf[i]+yield_dwf[i]
+    benefits[i]=benefits_ssf[i]+benefits_dwf[i]
+    
+  }
+  
+  t=seq(from=0, to=period-1)
+  pv=rho^t*benefits
+  npv=sum(pv)
+  
+  return(-npv)
+  
+}
+
+constraint_effort <- function(choice, int_state, p, c1, c2, r, K, period, q1, q2, discount) {
+  
+  state=vector(mode="numeric", length=0)
+  state=vector(mode="numeric", length=0)
+  # yield=vector(mode="numeric", length=0)
+  yield_ssf=vector(mode="numeric", length=0)
+  yield_dwf=vector(mode="numeric", length=0)
+  yield_total=vector(mode="numeric", length=0)
+  const=vector(mode="numeric", length=0)
+  
+  eff_matrix = matrix(choice, nrow=2, ncol=10)
+  # Initialize state and constraint variable; int_state is the time zero value of the state variable; see below for the definition of the constraint variable 
+  state[1]=int_state
+  
+  yield_ssf[1]=q1*state[1]*eff_matrix[1,1]
+  yield_dwf[1]=q2*state[1]*eff_matrix[2,1]
+  yield_total[1]=yield_ssf[1]+yield_dwf[1]
+  
+  const[1]=yield_total[1]-state[1]
+  
+  
+  for(i in 2:period){ # Loop values over the state and define constraint variable
+    
+    # Let the state evolve; this example matches the state equation for an exhaustible resource 
+    state[i]=state[i-1]+(r*state[i-1]*(1-(state[i-1]/K))) - yield_total[i-1]
+    
+    yield_ssf[i]=q1*state[i]*eff_matrix[1,i]
+    yield_dwf[i]=q2*state[i]*eff_matrix[2,i]
+    yield_total[i]=yield_ssf[i]+yield_dwf[i]
+    # Define constraint variable such that it is less than or equal to zero: if const[i] is leq 0, then choice[i]-state[i] is leq 0 and choice[i] is leq state[i]
+    const[i]=yield_total[i]-state[i] 
+  }
+  return(const)
+}
+
+local_opts<-list("algorithm"="NLOPT_LN_COBYLA",xtol_rel=1e-15)
+options=list("algorithm"="NLOPT_LN_AUGLAG",xtol_rel=1e-15,maxeval=16000,"local_opts"=local_opts)
+period = 10
+fishers = 2
+total_choices = period * fishers
+# choice, p, c, r, K, period, eff1, eff2, discount
+test1 <- nloptr(x0=rep(1, total_choices),
+                 eval_f = effort_fct,
+                 lb=rep(0, total_choices), # lower bound, extraction cannot be lower than 0
+                 opts = options,
+                 int_state=0.5,
+                 r=0.1,
+                 K=1,
+                 q1=0.1, # Define this 
+               q2 = 0.3, # Define this too (maybe choice?)
+                 p=500,
+                 c1=0.01,
+               c2=0.03,
+                 discount=.05,
+               period=10,
+                 eval_g_ineq = constraint_effort
+                 )
+options(scipen=999)
+
+test1$solution
+-test1$objective
+```
+
+Table Function
+
+```{r}
+
+effort_table_fct = function(choice, int_state=0.5, r=0.1, K=1, q1=0.1, q2 = 0.3, p=500,c1=0.01,c2=0.03,discount=.05,period=10) {
+  
+  state=vector(mode="numeric", length=0)
+  # yield=vector(mode="numeric", length=0)
+  benefits=vector(mode="numeric", length=0)
+  benefits_ssf=vector(mode="numeric", length=0)
+  benefits_dwf=vector(mode="numeric", length=0)
+  yield_ssf=vector(mode="numeric", length=0)
+  yield_dwf=vector(mode="numeric", length=0)
+  yield_total=vector(mode="numeric", length=0)
+  
+  rho=1/(1+discount)
+  
+  eff_matrix = matrix(choice, nrow=2, ncol=10)
+  
+  state[1]=int_state
+  
+  yield_ssf[1]=q1*state[1]*eff_matrix[1,1]
+  yield_dwf[1]=q2*state[1]*eff_matrix[2,1]
+  yield_total[1]=yield_ssf[1]+yield_dwf[1]
+  
+  benefits_ssf[1]=p*yield_ssf[1] - c1*(eff_matrix[1,1, drop=FALSE]^2)
+  benefits_dwf[1]=p*yield_dwf[1] - c2*(eff_matrix[2,1, drop=FALSE]^2)
+  benefits[1]=benefits_ssf[1]+benefits_dwf[1]
+  
+  for(i in 2:period){
+    state[i]=state[i-1] + (r*state[i-1]*(1-(state[i-1]/K))) - yield_total[i-1]
+    
+    yield_ssf[i]=q1*state[i]*eff_matrix[1,i]
+    benefits_ssf[i]=p*yield_ssf[i] - c1*(eff_matrix[1,i]^2)
+    
+    
+    yield_dwf[i]=q2*state[i]*eff_matrix[2,i]
+    benefits_dwf[i]=p*yield_dwf[i] - c2*(eff_matrix[2,i]^2)
+    
+    yield_total[i]=yield_ssf[i]+yield_dwf[i]
+    benefits[i]=benefits_ssf[i]+benefits_dwf[i]
+    
+  }
+  
+  t=seq(from=0, to=period-1)
+  pv=rho^t*benefits
+  npv=sum(pv)
+  
+  return(tibble(E_ssf=eff_matrix[1,], E_dwf=eff_matrix[2,], Y_ssf=yield_ssf, Y_dwf=yield_dwf))
+}
+```
+
+
+
+
+
+
+
