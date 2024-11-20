@@ -106,9 +106,18 @@ test <- nloptr(x0=rep(1, total_choices),
 ## Note that these values are very small because this is currently done between 0-1
 options(scipen=999)
 test$solution
+test$objective
 
 ```
 
+AK notes: Should we / do we need to write another loop to pull individual benefits for SSF / DWF? Would be curious to see how in this case the benefits are currently spread out. But this might be a more interesting question for when we have alpha in their, along with the weightings. 
 
+Agenda for Nate:
+
+- Gut check biological model 
+- review mathematics of profit function
+- Review current R code
+- discuss weighting + how to incorporate into the model
+- Assumptions needed?
 
 
