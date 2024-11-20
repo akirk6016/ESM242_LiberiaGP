@@ -187,6 +187,7 @@ constraint_effort <- function(choice, int_state, p, c1, c2, r, K, period, q1, q2
   # Initialize state and constraint variable; int_state is the time zero value of the state variable; see below for the definition of the constraint variable 
   state[1]=int_state
   
+  ## This portion is iffy. Would effort be applied to the total population? or would this be where a scaling parameter comes in controlling one or the others' yield based on their effort 
   yield_ssf[1]=q1*state[1]*eff_matrix[1,1]
   yield_dwf[1]=q2*state[1]*eff_matrix[2,1]
   yield_total[1]=yield_ssf[1]+yield_dwf[1]
@@ -225,7 +226,7 @@ test1 <- nloptr(x0=rep(1, total_choices),
                q2 = 0.3, # Define this too (maybe choice?)
                  p=500,
                  c1=0.01,
-               c2=0.03,
+               c2=0.02,
                  discount=.05,
                period=10,
                  eval_g_ineq = constraint_effort
@@ -284,8 +285,13 @@ effort_table_fct = function(choice, int_state=0.5, r=0.1, K=1, q1=0.1, q2 = 0.3,
   pv=rho^t*benefits
   npv=sum(pv)
   
-  return(tibble(E_ssf=eff_matrix[1,], E_dwf=eff_matrix[2,], Y_ssf=yield_ssf, Y_dwf=yield_dwf))
+  return(tibble(Time=t, E_ssf=eff_matrix[1,], E_dwf=eff_matrix[2,], Y_ssf=yield_ssf, Y_dwf=yield_dwf, Y_tot=yield_total, Pi_ssf=benefits_ssf, Pi_dwf=benefits_dwf, PV_total=pv))
 }
+
+## Either because of the state-yield_total portion or because the parameters are so small nothing is showing up here 
+effort_table=effort_table_fct(choice=test1$solution)
+
+knitr::kable(effort_table, align='c')
 ```
 
 
