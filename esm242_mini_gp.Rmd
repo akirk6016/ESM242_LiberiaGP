@@ -19,10 +19,7 @@ This problem involves a fish stock that evolves according to $X_{t+1}=X_t+F(X_t)
 
 
 ```{r}
-
-period=11
-
-fish_fct = function(choice, p, c, r, K, period, eff1, eff2, discount) {
+fish_fct = function(choice, int_state, p, c, r, K, period, eff1, eff2, discount) {
   
   state=vector(mode="numeric", length=0)
   # yield=vector(mode="numeric", length=0)
@@ -32,20 +29,20 @@ fish_fct = function(choice, p, c, r, K, period, eff1, eff2, discount) {
   
   rho=1/(1+discount)
   
-  yield_matrix = matrix(choice, nrow=2, ncol=period)
+  yield_matrix = matrix(choice, nrow=2, ncol=10)
   
   state[1]=int_state
   
-  benefits_ssf[1]=p*yield[1,1] - c*eff1
-  benefits_dwf[1]=p*yield[2,1] - c*eff2
+  benefits_ssf[1]=p*yield_matrix[1,1, drop = FALSE] - c*eff1
+  benefits_dwf[1]=p*yield_matrix[2,1, drop = FALSE] - c*eff2
   benefits[1]=benefits_ssf[1]+benefits_dwf[1]
   
   for(i in 2:period){
-    state[i]=state[i-1] + (r*state[i-1]*(1-(state[i-1]/K))) - colSums(yield_matrix[,i-1])
+    state[i]=state[i-1] + (r*state[i-1]*(1-(state[i-1]/K))) - colSums(yield_matrix[,i-1, drop = FALSE])
     
-    benefits_ssf[i]=p*yield[1,i]-c*eff1
+    benefits_ssf[i]=p*yield_matrix[1,i, drop = FALSE]-c*eff1
     
-    benefits_dwf[i]=p*yield[2,i]-c*eff2
+    benefits_dwf[i]=p*yield_matrix[2,i, drop = FALSE]-c*eff2
     
     benefits[i]=benefits_ssf[i]+benefits_dwf[i]
   }
@@ -58,45 +55,57 @@ fish_fct = function(choice, p, c, r, K, period, eff1, eff2, discount) {
   
 }
 
-constraint <- function(choice, p, c, r, K, period, eff1, eff2, discount) {
+constraint <- function(choice, int_state, p, c, r, K, period, eff1, eff2, discount) {
   
   state=vector(mode="numeric", length=0)
   const=vector(mode="numeric", length=0)
   
   
-  yield_matrix = matrix(choice, nrow=2, ncol=period)
+  yield_matrix = matrix(choice, nrow=2, ncol=10)
   
   # Initialize state and constraint variable; int_state is the time zero value of the state variable; see below for the definition of the constraint variable 
   state[1]=int_state
   
-  const[1]=colSums(yield_matrix[,1])-state[1]
+  const[1]=colSums(yield_matrix[,1, drop = FALSE])-state[1]
   
   
   for(i in 2:period){ # Loop values over the state and define constraint variable
     
     # Let the state evolve; this example matches the state equation for an exhaustible resource 
-    state[i]=state[i-1]+(r*state[i-1]*(1-(state[i-1]/K))) - colSums(yield_matrix[,i-1])
+    state[i]=state[i-1]+(r*state[i-1]*(1-(state[i-1]/K))) - colSums(yield_matrix[,i-1, drop = FALSE])
     
     # Define constraint variable such that it is less than or equal to zero: if const[i] is leq 0, then choice[i]-state[i] is leq 0 and choice[i] is leq state[i]
-    const[i]=colSums(yield_matrix[,i-1])-state[i] 
+    const[i]=colSums(yield_matrix[,i, drop = FALSE])-state[i] 
   }
   return(const)
 }
 
-test <- nloptr(x0=rep(1, period),
+local_opts<-list("algorithm"="NLOPT_LN_COBYLA",xtol_rel=1e-15)
+options=list("algorithm"="NLOPT_LN_AUGLAG",xtol_rel=1e-15,maxeval=16000,"local_opts"=local_opts)
+
+period = 10
+fishers = 2
+total_choices = period * fishers
+
+# choice, p, c, r, K, period, eff1, eff2, discount
+test <- nloptr(x0=rep(1, total_choices),
                  eval_f = fish_fct,
-                 lb=rep(0, period), # lower bound, extraction cannot be lower than 0
+                 lb=rep(0, total_choices), # lower bound, extraction cannot be lower than 0
                  opts = options,
                  int_state=0.5,
                  r=0.1,
-                 k=1,
+                 K=1,
                  eff1= 4, # Define this 
-               eff2 = 5, # Define this too (maybe choice?)
+               eff2 = 5, # Define this too (maybe as choice?) because it will determine yield
                  p=500,
                  c=0.01,
                  discount=.05,
+               period=10,
                  eval_g_ineq = constraint
                  )
+## Note that these values are very small because this is currently done between 0-1
+options(scipen=999)
+test$solution
 
 ```
 
