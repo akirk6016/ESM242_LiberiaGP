@@ -11,7 +11,31 @@ knitr::opts_chunk$set(echo = TRUE)
 library(tidyverse)
 library(nloptr)
 library(knitr)
-
+?nloptr::mlsl
 ```
+
+
+This problem involves a fish stock that evolves according to $X_{t+1}=X_t+F(X_t)-Y_t$, where the growth function is given by $F(X_t)=rX_t(1-X_t/K)$.  The profits from the fishery in each period are $pY_t-(c/2)*Y_t^2/X_t$ and the catch is proportional to the stock: $Y_t=\alpha X_t$. The objective is to maximize the present value of net benefits (PVNB) from time 0 to time 19 by selecting the catchability coefficient $\alpha$: 
+
+
+```{r}
+fish_fct = function(choice, p, c, r, K, period, discount) {
+  
+  state=vector(mode="numeric", length=0)
+  yield=vector(mode="numeric", length=0)
+  benefits=vector(mode="numeric", length=0)
+  
+  yield_matrix = matrix(choice, nrow=2, ncol=10)
+  
+  state[1]=int_state
+  
+  benefits[1]=p*(q*state[1]*choice[1]) - c*(choice[1]^2)
+  
+  
+  
+}
+```
+
+
 
 
