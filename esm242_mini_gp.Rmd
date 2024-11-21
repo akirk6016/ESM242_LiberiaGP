@@ -294,7 +294,12 @@ effort_table=effort_table_fct(choice=test1$solution)
 knitr::kable(effort_table, align='c')
 ```
 
-
+* model description:
+- effort is a choice matrix between two fishers and 10 periods
+- the state is the fish stock. In this case we are using a simple schaefer model for stock that both fishers are fishing from
+- the yield is the product of the stock and the effort for each fisher.
+  * but does this capture that the catch of one impacts the catch of the other?
+- Simple individual prfit functions are used, optimization is done on the sum of the two functions. 
 
 
 
