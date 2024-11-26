@@ -119,8 +119,21 @@ Agenda for Nate:
 - Review current R code
 - discuss weighting + how to incorporate into the model
 - Assumptions needed?
-
-
+ 
+- price is the true reflection of how the people value the fish, but some people eat their fish. would need to make something up
+- keep market price, but then keep it as movable parameter + p of consumption, which will never be estimated
+ - to ballpark it when uncertain, can we calibrate it to reflect what we see in the real world (i.e. what we see in the current data) 
+- estimating costs: we can ignore cost and say that fishers will fish down to some level every single time
+- main reason we want convexity in the model, but we have that in the biological model
+- hard to estimate weighting parameter and make decisions off of it. 
+- what does the shape of our alpha v. beta graph look like?
+- if beta = one, then we need to add cost data for SSF to keep convexity 
+- what is the cost relative to how much benefit I get. or use cost from some other fishery, 
+- assume some linear cost, which c fits the data the best? use captain data, just do simple algebra to find. 
+- here can say that this highlights the importance of NaFAA collecting data. 
+- Cost Paramater that we can estimate later. 
+- we are choosing one alpha across all time periods 
+- can use optum 
 DD Notes: Adding in another version that optimizes effort, and including a table function to visualize
 
 
