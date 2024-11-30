@@ -11,104 +11,10 @@ knitr::opts_chunk$set(echo = TRUE)
 library(tidyverse)
 library(nloptr)
 library(knitr)
-?nloptr::mlsl
 ```
 
 
 This problem involves a fish stock that evolves according to $X_{t+1}=X_t+F(X_t)-Y_t$, where the growth function is given by $F(X_t)=rX_t(1-X_t/K)$.  The profits from the fishery in each period are $pY_t-(c/2)*Y_t^2/X_t$ and the catch is proportional to the stock: $Y_t=\alpha X_t$. The objective is to maximize the present value of net benefits (PVNB) from time 0 to time 19 by selecting the catchability coefficient $\alpha$: 
-
-
-```{r}
-fish_fct = function(choice, int_state, p, c, r, K, period, eff1, eff2, discount) {
-  
-  state=vector(mode="numeric", length=0)
-  # yield=vector(mode="numeric", length=0)
-  benefits=vector(mode="numeric", length=0)
-  benefits_ssf=vector(mode="numeric", length=0)
-  benefits_dwf=vector(mode="numeric", length=0)
-  
-  rho=1/(1+discount)
-  
-  yield_matrix = matrix(choice, nrow=2, ncol=10)
-  
-  state[1]=int_state
-  
-  benefits_ssf[1]=p*yield_matrix[1,1, drop = FALSE] - c*eff1
-  benefits_dwf[1]=p*yield_matrix[2,1, drop = FALSE] - c*eff2
-  benefits[1]=benefits_ssf[1]+benefits_dwf[1]
-  
-  for(i in 2:period){
-    state[i]=state[i-1] + (r*state[i-1]*(1-(state[i-1]/K))) - colSums(yield_matrix[,i-1, drop = FALSE])
-    
-    benefits_ssf[i]=p*yield_matrix[1,i, drop = FALSE]-c*eff1
-    
-    benefits_dwf[i]=p*yield_matrix[2,i, drop = FALSE]-c*eff2
-    
-    benefits[i]=benefits_ssf[i]+benefits_dwf[i]
-  }
-  
-  t=seq(from=0, to=period-1)
-  pv=rho^t*benefits
-  npv=sum(pv)
-  
-  return(-npv)
-  
-}
-
-constraint <- function(choice, int_state, p, c, r, K, period, eff1, eff2, discount) {
-  
-  state=vector(mode="numeric", length=0)
-  const=vector(mode="numeric", length=0)
-  
-  
-  yield_matrix = matrix(choice, nrow=2, ncol=10)
-  
-  # Initialize state and constraint variable; int_state is the time zero value of the state variable; see below for the definition of the constraint variable 
-  state[1]=int_state
-  
-  const[1]=colSums(yield_matrix[,1, drop = FALSE])-state[1]
-  
-  
-  for(i in 2:period){ # Loop values over the state and define constraint variable
-    
-    # Let the state evolve; this example matches the state equation for an exhaustible resource 
-    state[i]=state[i-1]+(r*state[i-1]*(1-(state[i-1]/K))) - colSums(yield_matrix[,i-1, drop = FALSE])
-    
-    # Define constraint variable such that it is less than or equal to zero: if const[i] is leq 0, then choice[i]-state[i] is leq 0 and choice[i] is leq state[i]
-    const[i]=colSums(yield_matrix[,i, drop = FALSE])-state[i] 
-  }
-  return(const)
-}
-
-local_opts<-list("algorithm"="NLOPT_LN_COBYLA",xtol_rel=1e-15)
-options=list("algorithm"="NLOPT_LN_AUGLAG",xtol_rel=1e-15,maxeval=16000,"local_opts"=local_opts)
-
-period = 10
-fishers = 2
-total_choices = period * fishers
-
-# choice, p, c, r, K, period, eff1, eff2, discount
-test <- nloptr(x0=rep(1, total_choices),
-                 eval_f = fish_fct,
-                 lb=rep(0, total_choices), # lower bound, extraction cannot be lower than 0
-                 opts = options,
-                 int_state=0.5,
-                 r=0.1,
-                 K=1,
-                 eff1= 4, # Define this 
-               eff2 = 5, # Define this too (maybe as choice?) because it will determine yield
-                 p=500,
-                 c=0.01,
-                 discount=.05,
-               period=10,
-                 eval_g_ineq = constraint
-                 )
-## Note that these values are very small because this is currently done between 0-1
-options(scipen=999)
-test$solution
-test$objective
-
-```
 
 AK notes: Should we / do we need to write another loop to pull individual benefits for SSF / DWF? Would be curious to see how in this case the benefits are currently spread out. But this might be a more interesting question for when we have alpha in their, along with the weightings. 
 
@@ -136,177 +42,6 @@ Agenda for Nate:
 - can use optum 
 DD Notes: Adding in another version that optimizes effort, and including a table function to visualize
 
-
-```{r}
-effort_fct = function(choice, int_state, p, c1, c2, r, K, period, q1, q2, discount) {
-  
-  state=vector(mode="numeric", length=0)
-  # yield=vector(mode="numeric", length=0)
-  benefits=vector(mode="numeric", length=0)
-  benefits_ssf=vector(mode="numeric", length=0)
-  benefits_dwf=vector(mode="numeric", length=0)
-  yield_ssf=vector(mode="numeric", length=0)
-  yield_dwf=vector(mode="numeric", length=0)
-  yield_total=vector(mode="numeric", length=0)
-  
-  rho=1/(1+discount)
-  
-  eff_matrix = matrix(choice, nrow=2, ncol=10)
-  
-  state[1]=int_state
-  
-  yield_ssf[1]=q1*state[1]*eff_matrix[1,1]
-  yield_dwf[1]=q2*state[1]*eff_matrix[2,1]
-  yield_total[1]=yield_ssf[1]+yield_dwf[1]
-  
-  benefits_ssf[1]=p*yield_ssf[1] - c1*(eff_matrix[1,1, drop=FALSE]^2)
-  benefits_dwf[1]=p*yield_dwf[1] - c2*(eff_matrix[2,1, drop=FALSE]^2)
-  benefits[1]=benefits_ssf[1]+benefits_dwf[1]
-  
-  for(i in 2:period){
-    state[i]=state[i-1] + (r*state[i-1]*(1-(state[i-1]/K))) - yield_total[i-1]
-    
-    yield_ssf[i]=q1*state[i]*eff_matrix[1,i]
-    benefits_ssf[i]=p*yield_ssf[i] - c1*(eff_matrix[1,i]^2)
-    
-    
-    yield_dwf[i]=q2*state[i]*eff_matrix[2,i]
-    benefits_dwf[i]=p*yield_dwf[i] - c2*(eff_matrix[2,i]^2)
-    
-    yield_total[i]=yield_ssf[i]+yield_dwf[i]
-    benefits[i]=benefits_ssf[i]+benefits_dwf[i]
-    
-  }
-  
-  t=seq(from=0, to=period-1)
-  pv=rho^t*benefits
-  npv=sum(pv)
-  
-  return(-npv)
-  
-}
-
-constraint_effort <- function(choice, int_state, p, c1, c2, r, K, period, q1, q2, discount) {
-  
-  state=vector(mode="numeric", length=0)
-  state=vector(mode="numeric", length=0)
-  # yield=vector(mode="numeric", length=0)
-  yield_ssf=vector(mode="numeric", length=0)
-  yield_dwf=vector(mode="numeric", length=0)
-  yield_total=vector(mode="numeric", length=0)
-  const=vector(mode="numeric", length=0)
-  
-  eff_matrix = matrix(choice, nrow=2, ncol=10)
-  # Initialize state and constraint variable; int_state is the time zero value of the state variable; see below for the definition of the constraint variable 
-  state[1]=int_state
-  
-  ## This portion is iffy. Would effort be applied to the total population? or would this be where a scaling parameter comes in controlling one or the others' yield based on their effort 
-  yield_ssf[1]=q1*state[1]*eff_matrix[1,1]
-  yield_dwf[1]=q2*state[1]*eff_matrix[2,1]
-  yield_total[1]=yield_ssf[1]+yield_dwf[1]
-  
-  const[1]=yield_total[1]-state[1]
-  
-  
-  for(i in 2:period){ # Loop values over the state and define constraint variable
-    
-    # Let the state evolve; this example matches the state equation for an exhaustible resource 
-    state[i]=state[i-1]+(r*state[i-1]*(1-(state[i-1]/K))) - yield_total[i-1]
-    
-    yield_ssf[i]=q1*state[i]*eff_matrix[1,i]
-    yield_dwf[i]=q2*state[i]*eff_matrix[2,i]
-    yield_total[i]=yield_ssf[i]+yield_dwf[i]
-    # Define constraint variable such that it is less than or equal to zero: if const[i] is leq 0, then choice[i]-state[i] is leq 0 and choice[i] is leq state[i]
-    const[i]=yield_total[i]-state[i] 
-  }
-  return(const)
-}
-
-local_opts<-list("algorithm"="NLOPT_LN_COBYLA",xtol_rel=1e-15)
-options=list("algorithm"="NLOPT_LN_AUGLAG",xtol_rel=1e-15,maxeval=16000,"local_opts"=local_opts)
-period = 10
-fishers = 2
-total_choices = period * fishers
-# choice, p, c, r, K, period, eff1, eff2, discount
-test1 <- nloptr(x0=rep(1, total_choices),
-                 eval_f = effort_fct,
-                 lb=rep(0, total_choices), # lower bound, extraction cannot be lower than 0
-                 opts = options,
-                 int_state=0.5,
-                 r=0.1,
-                 K=1,
-                 q1=0.1, # Define this 
-               q2 = 0.3, # Define this too (maybe choice?)
-                 p=500,
-                 c1=0.01,
-               c2=0.02,
-                 discount=.05,
-               period=10,
-                 eval_g_ineq = constraint_effort
-                 )
-options(scipen=999)
-
-test1$solution
--test1$objective
-```
-
-Table Function
-
-```{r}
-
-effort_table_fct = function(choice, int_state=0.5, r=0.1, K=1, q1=0.1, q2 = 0.3, p=500,c1=0.01,c2=0.03,discount=.05,period=10) {
-  
-  state=vector(mode="numeric", length=0)
-  # yield=vector(mode="numeric", length=0)
-  benefits=vector(mode="numeric", length=0)
-  benefits_ssf=vector(mode="numeric", length=0)
-  benefits_dwf=vector(mode="numeric", length=0)
-  yield_ssf=vector(mode="numeric", length=0)
-  yield_dwf=vector(mode="numeric", length=0)
-  yield_total=vector(mode="numeric", length=0)
-  
-  rho=1/(1+discount)
-  
-  eff_matrix = matrix(choice, nrow=2, ncol=10)
-  
-  state[1]=int_state
-  
-  yield_ssf[1]=q1*state[1]*eff_matrix[1,1]
-  yield_dwf[1]=q2*state[1]*eff_matrix[2,1]
-  yield_total[1]=yield_ssf[1]+yield_dwf[1]
-  
-  benefits_ssf[1]=p*yield_ssf[1] - c1*(eff_matrix[1,1, drop=FALSE]^2)
-  benefits_dwf[1]=p*yield_dwf[1] - c2*(eff_matrix[2,1, drop=FALSE]^2)
-  benefits[1]=benefits_ssf[1]+benefits_dwf[1]
-  
-  for(i in 2:period){
-    state[i]=state[i-1] + (r*state[i-1]*(1-(state[i-1]/K))) - yield_total[i-1]
-    
-    yield_ssf[i]=q1*state[i]*eff_matrix[1,i]
-    benefits_ssf[i]=p*yield_ssf[i] - c1*(eff_matrix[1,i]^2)
-    
-    
-    yield_dwf[i]=q2*state[i]*eff_matrix[2,i]
-    benefits_dwf[i]=p*yield_dwf[i] - c2*(eff_matrix[2,i]^2)
-    
-    yield_total[i]=yield_ssf[i]+yield_dwf[i]
-    benefits[i]=benefits_ssf[i]+benefits_dwf[i]
-    
-  }
-  
-  t=seq(from=0, to=period-1)
-  pv=rho^t*benefits
-  npv=sum(pv)
-  
-  return(tibble(Time=t, E_ssf=eff_matrix[1,], E_dwf=eff_matrix[2,], Y_ssf=yield_ssf, Y_dwf=yield_dwf, Y_tot=yield_total, Pi_ssf=benefits_ssf, Pi_dwf=benefits_dwf, PV_total=pv))
-}
-
-## Either because of the state-yield_total portion or because the parameters are so small nothing is showing up here 
-effort_table=effort_table_fct(choice=test1$solution)
-
-knitr::kable(effort_table, align='c')
-```
-
 * model description:
 - effort is a choice matrix between two fishers and 10 periods
 - the state is the fish stock. In this case we are using a simple schaefer model for stock that both fishers are fishing from
@@ -314,6 +49,106 @@ knitr::kable(effort_table, align='c')
   * but does this capture that the catch of one impacts the catch of the other?
 - Simple individual prfit functions are used, optimization is done on the sum of the two functions. 
 
+```{r}
+local_opts<-list("algorithm"="NLOPT_LN_COBYLA",xtol_rel=1e-15)
+options=list("algorithm"="NLOPT_LN_AUGLAG",xtol_rel=1e-15,maxeval=160000,"local_opts"=local_opts)
+
+harvest_dwf <- function(choice, int_state, alpha, p, c_d, q, r, K, discount, period) {
+  
+  benefits=vector(mode="numeric", length=0)
+  # choice=vector(mode="numeric",length=0)
+  state=vector(mode="numeric",length=0)
+  
+  state[1]=int_state
+  benefits[1]=(p*(1-alpha)*choice[1])-(c_d*((choice[1]/(q*state[1]))^2))
+  
+  rho=1/(1+discount)
+  
+  for(i in 2:period){
+    
+    state[i]=state[i-1]+(state[i-1]*r*(1-(state[i-1]/K)))-choice[i-1]
+    
+    benefits[i]=(p*((1-alpha)*choice[i]))-(c_d*((choice[i]/(q*state[i]))^2))
+  }
+  
+  t=seq(from=0,to=period-1)
+  
+  pv=rho^t*benefits
+  npv=sum(pv)
+  
+  return(-npv)
+}
+
+constraint_dwf <- function(choice, int_state, alpha, p, c_d, q, r, K, discount, period) {
+  
+  state=vector(mode="numeric", length=0)
+  const=vector(mode="numeric", length=0)
+  
+  state[1]=int_state
+  const[1]=choice[1]-state[1]
+  
+  for(i in 2:period) {
+    
+    state[i]=state[i-1]+(state[i-1]*r*(1-(state[i-1]/K)))-choice[i-1]
+    const[i]=choice[i]-state[i]
+  }
+  
+  return(const)
+}
+
+period=50
+
+H_d_out = nloptr(
+  x0 = rep(500000, period),
+  eval_f = harvest_dwf,
+  lb = rep(0, period),
+  opts = options,
+  eval_g_ineq = constraint_dwf,
+  int_state = 60000000,
+  alpha = 0.8,
+  p = 1.3,
+  c_d = 0.63,
+  q = 0.01,
+  r = 0.45,
+  K = 100000000,
+  discount = 0.05,
+  period = 50
+)
+
+# Huzzah! The harvest function works as well as the constraint, which puts an upper bound essentially on it 
+
+benefits_fct <- function(choice, Hd_fct, constraintd_fct, discount, period, beta, Pi_s){
+  
+  benefits=vector(mode="numeric",length=0)
+  
+  rho=1/(1+discount)
+  
+  for(i in 1:period) {
+    benefits[i]=beta*Pi_s + (1-beta)*choice*(nloptr(x0 = rep(500000, period),eval_f = Hd_fct,lb = rep(0, period),opts = options,eval_g_ineq = constraintd_fct,int_state = 60000000,alpha = choice,p = 1.3,c_d = 0.63,q = 0.01,r = 0.45,K = 100000000,discount = 0.05,period = 50)$objective[i])
+  }
+  
+  t=seq(from=0, to=period-1)
+  pv=rho^t*benefits
+  npv=sum(pv)
+  
+  return(-npv)
+}
+
+benefits_out=nloptr(x0=0.2,
+                    eval_f = benefits_fct,
+                    opts = options,
+                    lb = 0,
+                    ub = 1,
+                    Hd_fct = harvest_dwf,
+                    constraintd_fct = constraint_dwf,
+                    discount = 0.05,
+                    period = 50,
+                    beta = 0.5,
+                    Pi_s = 100000
+                    )
+benefits_out$solution
+-benefits_out$objective
+```
 
 
 
