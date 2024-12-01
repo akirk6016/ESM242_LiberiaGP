@@ -49,24 +49,45 @@ DD Notes: Adding in another version that optimizes effort, and including a table
   * but does this capture that the catch of one impacts the catch of the other?
 - Simple individual prfit functions are used, optimization is done on the sum of the two functions. 
 
+### Formulas for Biomass and Benefits 
+
+$$
+\mathrm{X_{t+1,D}=X_{t,D}+rX_{t,D}(1-\frac{X_{t,D}}{K_{D}}) \\
+\text{Where: } X_{0,D}=BI*k_{D} \\
+\Pi_{D}=\sum_{t=0}^{T} \rho^{t} (p (1-\alpha) Y_{t,D} - c_{D} (\frac{Y_{t,D}}{q_DX_{t,D}})) \\
+\text{Subject to: } Y_{t,D} \lt X_{t,D}}
+$$
+
+$$
+\mathrm{X_{t+1,S}=X_{t,S}+rX_{t,S}(1-\frac{X_{t,S}}{K_{S}}) \\
+\text{Where: } X_{0,S}=BI*k_{S} \\
+\Pi_{S}=\sum_{t=0}^{T} \rho^{t} (p (1-\alpha) Y_{t,S} - c_{S} (\frac{Y_{t,S}}{q_SX_{t,S}})) \\
+\text{Subject to: } Y_{t,S} \lt X_{t,S}}
+$$
+
+$$
+\mathrm{NPV=\beta\Pi_{S}+(1-\beta) \alpha \Pi_D}
+
+$$
+
 ```{r}
 local_opts<-list("algorithm"="NLOPT_LN_COBYLA",xtol_rel=1e-15)
 options=list("algorithm"="NLOPT_LN_AUGLAG",xtol_rel=1e-15,maxeval=160000,"local_opts"=local_opts)
 
-harvest_dwf <- function(choice, int_state, alpha, p, c_d, q, r, K, discount, period, proportion) {
+harvest_dwf <- function(choice, int_state, alpha, p, c_d, q, r, Kd, discount, period, proportion) {
   
   benefits=vector(mode="numeric", length=0)
   # choice=vector(mode="numeric",length=0)
   state=vector(mode="numeric",length=0)
   
-  state[1]=int_state
+  state[1]=int_state*proportion
   benefits[1]=(p*(1-alpha)*choice[1])-(c_d*((choice[1]/(q*state[1]))^2))
   
   rho=1/(1+discount)
   
   for(i in 2:period){
     
-    state[i]=state[i-1]+(state[i-1]*r*(1-(state[i-1]/K)))-choice[i-1]
+    state[i]=state[i-1]+(state[i-1]*r*(1-(state[i-1]/Kd)))-choice[i-1]
     
     benefits[i]=(p*((1-alpha)*choice[i]))-(c_d*((choice[i]/(q*state[i]))^2))
   }
@@ -79,59 +100,36 @@ harvest_dwf <- function(choice, int_state, alpha, p, c_d, q, r, K, discount, per
   return(-npv)
 }
 
-constraint_dwf <- function(choice, int_state, alpha, p, c_d, q, r, K, discount, period, proportion) {
+constraint_dwf <- function(choice, int_state, alpha, p, c_d, q, r, Kd, discount, period, proportion) {
   
   state=vector(mode="numeric", length=0)
   const=vector(mode="numeric", length=0)
   
-  state[1]=int_state
+  state[1]=int_state*proportion
   const[1]=choice[1]-state[1]
   
   for(i in 2:period) {
     
-    state[i]=state[i-1]+(state[i-1]*r*(1-(state[i-1]/K)))-choice[i-1]
-    const[i]=choice[i]-(state[i]*proportion)
+    state[i]=state[i-1]+(state[i-1]*r*(1-(state[i-1]/Kd)))-choice[i-1]
+    const[i]=choice[i]-state[i]
   }
   
   return(const)
 }
 
-period=50
-
-# H_d_out = nloptr(
-#   x0 = rep(500000, period),
-#   eval_f = harvest_dwf,
-#   lb = rep(0, period),
-#   opts = options,
-#   eval_g_ineq = constraint_dwf,
-#   int_state = 60000000,
-#   alpha = 0.6,
-#   p = 1.3,
-#   c_d = 0.63,
-#   q = 0.01,
-#   r = 0.45,
-#   K = 100000000,
-#   discount = 0.05,
-#   period = 50,
-#   proportion=0.6
-# )
-# H_d_out$solution
-# -H_d_out$objective
-# Huzzah! The harvest function works as well as the constraint, which puts an upper bound essentially on it 
-
-harvest_ssf <- function(choice, int_state, p, c_s, q, r, K, discount, period, proportion) {
+harvest_ssf <- function(choice, int_state, p, c_s, q, r, Ks, discount, period, proportion) {
   
   benefits=vector(mode="numeric", length=0)
   state=vector(mode="numeric",length=0)
   
   rho=1/(1+discount)
   
-  state[1]=int_state
+  state[1]=int_state*proportion
   benefits[1]=p*choice[1] - (c_s*((choice[1]/(q*state[1]))^2))
   
   for(i in 2:period) {
     
-    state[i]=state[i-1]+(state[i-1]*r*(1-(state[i-1]/K)))-choice[i-1]
+    state[i]=state[i-1]+(state[i-1]*r*(1-(state[i-1]/Ks)))-choice[i-1]
     benefits[i]=p*choice[i] - (c_s*((choice[i]/(q*state[i]))^2))
   }
   
@@ -142,35 +140,35 @@ harvest_ssf <- function(choice, int_state, p, c_s, q, r, K, discount, period, pr
   return(-npv)
 }
 
-constraint_ssf <- function(choice, int_state, p, c_s, q, r, K, discount, period, proportion) {
+
+constraint_ssf <- function(choice, int_state, p, c_s, q, r, Ks, discount, period, proportion) {
   
   state=vector(mode="numeric", length=0)
   const=vector(mode="numeric", length=0)
   
-  state[1]=int_state
+  state[1]=int_state*proportion
   const[1]=choice[1]-state[1]
   
   for(i in 2:period){
     
-    state[i]=state[i-1]+(state[i-1]*r*(1-(state[i-1]/K)))-choice[i-1]
-    const[i]=choice[i]-(state[i]*(1-proportion))
+    state[i]=state[i-1]+(state[i-1]*r*(1-(state[i-1]/Ks)))-choice[i-1]
+    const[i]=choice[i]-state[i]
   }
   return(const)
 }
 
-benefits_fct <- function(choice, Hd_fct, constraintd_fct, Hs_fct, constraints_fct, discount, period, beta, Pi_s){
+benefits_fct <- function(choice, Hd_fct, constraintd_fct, Hs_fct, constraints_fct, discount, period, beta){
   
   benefits=vector(mode="numeric",length=0)
   
   rho=1/(1+discount)
   
-  for(i in 1:period) {
-    benefits[i]=((1-beta)*choice*(nloptr(x0 = rep(500000, period),eval_f = Hd_fct,lb = rep(0, period),opts = options,eval_g_ineq = constraintd_fct,int_state = 60000000,alpha = choice,p = 1.3,c_d = 0.63,q = 0.01,r = 0.45,K = 100000000,discount = 0.05,period = 50,proportion=0.6)$objective)) + (beta*(nloptr(x0=rep(8000000, period),eval_f=Hs_fct,lb=rep(0,period),opts=options,eval_g_ineq=constraints_fct,int_state=60000000,p=1.3,c_s=0.91,q=0.01,r=0.45,K=100000000, discount=0.05,period=50,proportion=0.6)$objective))
-  }
   
-  t=seq(from=0, to=period-1)
-  pv=rho^t*benefits
-  npv=sum(pv)
+    benefits=((1-beta)*choice*-(nloptr(x0 = rep(500000, period),eval_f = Hd_fct,lb = rep(0, period),opts = options,eval_g_ineq = constraintd_fct,int_state = 60000000,alpha = choice,p = 1.3,c_d = 0.63,q = 0.01,r = 0.45, Kd=100000000*0.5,discount = 0.05,period = 50,proportion=0.5)$objective)) + (beta*-(nloptr(x0=rep(500000, period),eval_f=Hs_fct,lb=rep(0,period),opts=options,eval_g_ineq=constraints_fct,int_state=60000000,p=1.3,c_s=0.91,q=0.01,r=0.45,Ks=100000000*0.5, discount=0.05,period=50,proportion=0.5)$objective))
+  
+  # t=seq(from=0, to=period-1)
+  # pv=rho^t*benefits
+  npv=sum(benefits)
   
   return(-npv)
 }
@@ -186,27 +184,176 @@ benefits_out=nloptr(x0=0.2,
                     constraints_fct = constraint_ssf,
                     discount = 0.05,
                     period = 50,
-                    beta = 0.5,
-                    Pi_s = 100000
+                    beta = 0.7
                     )
 benefits_out$solution
 -benefits_out$objective
-
-I=60000000
-K=100000000
-Is=I*0.6
-Id=I*0.4
-Ks=K*0.6
-Kd=K*0.4
-r=0.45
-overall=I+(0.45*I*(1-(I/K)))
-S1=Is+(0.45*Is*(1-(Is/Ks)))
-D1=Id+(0.45*Id*(1-(Id/Kd)))
-S1+D1 == overall
-S1
-D1
+# 0.7*(-H_s_out$objective) + (1-0.7)*(benefits_out$solution*(-H_d_out$objective))
+# I=60000000
+# K=100000000
+# Is=I*0.6
+# Id=I*0.4
+# Ks=K*0.6
+# Kd=K*0.4
+# r=0.45
+# overall=I+(0.45*I*(1-(I/K)))
+# S1=Is+(0.45*Is*(1-(Is/Ks)))
+# D1=Id+(0.45*Id*(1-(Id/Kd)))
+# S1+D1 == overall
+# S1
+# D1
 ```
 
+## Visualizing the above outcome 
 
+### DWF Optimal Solution Table
+
+```{r}
+int_state = 60000000
+p = 1.3
+c_d = 0.63
+q = 0.01
+r = 0.45
+Kd=100000000*0.5
+discount = 0.05
+period = 50
+proportiond=0.5
+
+H_d_out = nloptr(
+  x0 = rep(500000, period),
+  eval_f = harvest_dwf,
+  lb = rep(0, period),
+  opts = options,
+  eval_g_ineq = constraint_dwf,
+  int_state = 60000000,
+  alpha = benefits_out$solution,
+  p = 1.3,
+  c_d = 0.63,
+  q = 0.01,
+  r = 0.45,
+  Kd = 100000000*0.5,
+  discount = 0.05,
+  period = 50,
+  proportion=0.5
+)
+H_d_out$solution
+-H_d_out$objective
+
+dwf_table <- function(choice, int_state, alpha, p, c_d, q, r, Kd, discount, period, proportion) {
+  
+  benefits=vector(mode="numeric", length=0)
+  # choice=vector(mode="numeric",length=0)
+  state=vector(mode="numeric",length=0)
+  
+  state[1]=int_state*proportion
+  benefits[1]=(p*(1-alpha)*choice[1])-(c_d*((choice[1]/(q*state[1]))^2))
+  
+  rho=1/(1+discount)
+  
+  for(i in 2:period){
+    
+    state[i]=state[i-1]+(state[i-1]*r*(1-(state[i-1]/Kd)))-choice[i-1]
+    
+    benefits[i]=(p*((1-alpha)*choice[i]))-(c_d*((choice[i]/(q*state[i]))^2))
+  }
+  
+  t=seq(from=0,to=period-1)
+  
+  pv=rho^t*benefits
+  
+  
+  return(tibble("Time"=t, "Biomass"=state, "Yield"=choice, "PV"=pv))
+}
+
+dwf_df = dwf_table(choice=H_d_out$solution, int_state=int_state, alpha=benefits_out$solution, p=p, c_d=c_d, q=q, r=r, Kd=Kd, discount=discount,period=period,proportion=proportiond) %>% 
+  mutate(Fleet = "DWF")
+```
+
+### SSF Optimal Solution Table
+
+```{r}
+ssf_table <- function(choice, int_state, p, c_s, q, r, Ks, discount, period, proportion) {
+  
+  benefits=vector(mode="numeric", length=0)
+  state=vector(mode="numeric",length=0)
+  
+  rho=1/(1+discount)
+  
+  state[1]=int_state*proportion
+  benefits[1]=p*choice[1] - (c_s*((choice[1]/(q*state[1]))^2))
+  
+  for(i in 2:period) {
+    
+    state[i]=state[i-1]+(state[i-1]*r*(1-(state[i-1]/Ks)))-choice[i-1]
+    benefits[i]=p*choice[i] - (c_s*((choice[i]/(q*state[i]))^2))
+  }
+  
+  t=seq(from=0, to=period-1)
+  pv=rho^t*benefits
+  
+  
+  return(tibble("Time"=t, "Biomass"=state, "Yield"=choice, "PV"=pv))
+}
+
+H_s_out = nloptr(
+  x0 = rep(1000000, period),
+  eval_f = harvest_ssf,
+  lb = rep(0, period),
+  opts = options,
+  eval_g_ineq = constraint_ssf,
+  int_state = 60000000,
+  p = 1.3,
+  c_s = 0.91,
+  q = 0.03,
+  r = 0.45,
+  Ks = 100000000 * 0.5,
+  discount = 0.05,
+  period = 50,
+  proportion = 0.5
+)
+
+H_s_out$solution
+-H_s_out$objective
+
+int_state = 60000000
+p = 1.3
+c_s = 0.91
+q = 0.03
+r = 0.45
+Ks = 100000000 * 0.5
+discount = 0.05
+period = 50
+proportions = 0.5
+
+ssf_df = ssf_table(choice=H_s_out$solution, int_state=int_state, p=p, c_s=c_s, q=q, r=r, Ks=Ks, discount=discount, period=period, proportion=proportions) %>% 
+  mutate(Fleet = "SSF")
+
+total_table= dwf_df %>% 
+  rbind(ssf_df)
+```
+
+## Plotting Optimal outcome 
+
+```{r}
+yield_plot=ggplot(total_table) +
+  geom_point(aes(x=Time, y=Yield, color = Fleet), alpha=0.5) +
+  geom_line(aes(x=Time, y=Biomass)) +
+  labs(title="SSF Yield and DWF Yield over Time") + 
+  theme_bw()
+yield_plot
+
+H_s_out$solution
+H_d_out$solution
+
+biomass_plot=ggplot(total_table) +
+  geom_line(aes(x=Time, y=Biomass))
+biomass_plot
+
+benefits_plot=ggplot(total_table) +
+  geom_point(aes(x=Time, y=PV, color = Fleet), alpha=0.5) +
+  labs(title="SSF Benefits and DWF Benefits over Time") + 
+  theme_bw()
+benefits_plot
+```
 
 
