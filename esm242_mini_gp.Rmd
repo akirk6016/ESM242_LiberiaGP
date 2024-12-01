@@ -53,7 +53,7 @@ DD Notes: Adding in another version that optimizes effort, and including a table
 local_opts<-list("algorithm"="NLOPT_LN_COBYLA",xtol_rel=1e-15)
 options=list("algorithm"="NLOPT_LN_AUGLAG",xtol_rel=1e-15,maxeval=160000,"local_opts"=local_opts)
 
-harvest_dwf <- function(choice, int_state, alpha, p, c_d, q, r, K, discount, period) {
+harvest_dwf <- function(choice, int_state, alpha, p, c_d, q, r, K, discount, period, proportion) {
   
   benefits=vector(mode="numeric", length=0)
   # choice=vector(mode="numeric",length=0)
@@ -79,7 +79,7 @@ harvest_dwf <- function(choice, int_state, alpha, p, c_d, q, r, K, discount, per
   return(-npv)
 }
 
-constraint_dwf <- function(choice, int_state, alpha, p, c_d, q, r, K, discount, period) {
+constraint_dwf <- function(choice, int_state, alpha, p, c_d, q, r, K, discount, period, proportion) {
   
   state=vector(mode="numeric", length=0)
   const=vector(mode="numeric", length=0)
@@ -90,7 +90,7 @@ constraint_dwf <- function(choice, int_state, alpha, p, c_d, q, r, K, discount, 
   for(i in 2:period) {
     
     state[i]=state[i-1]+(state[i-1]*r*(1-(state[i-1]/K)))-choice[i-1]
-    const[i]=choice[i]-state[i]
+    const[i]=choice[i]-(state[i]*proportion)
   }
   
   return(const)
@@ -98,33 +98,74 @@ constraint_dwf <- function(choice, int_state, alpha, p, c_d, q, r, K, discount, 
 
 period=50
 
-H_d_out = nloptr(
-  x0 = rep(500000, period),
-  eval_f = harvest_dwf,
-  lb = rep(0, period),
-  opts = options,
-  eval_g_ineq = constraint_dwf,
-  int_state = 60000000,
-  alpha = 0.8,
-  p = 1.3,
-  c_d = 0.63,
-  q = 0.01,
-  r = 0.45,
-  K = 100000000,
-  discount = 0.05,
-  period = 50
-)
-
+# H_d_out = nloptr(
+#   x0 = rep(500000, period),
+#   eval_f = harvest_dwf,
+#   lb = rep(0, period),
+#   opts = options,
+#   eval_g_ineq = constraint_dwf,
+#   int_state = 60000000,
+#   alpha = 0.6,
+#   p = 1.3,
+#   c_d = 0.63,
+#   q = 0.01,
+#   r = 0.45,
+#   K = 100000000,
+#   discount = 0.05,
+#   period = 50,
+#   proportion=0.6
+# )
+# H_d_out$solution
+# -H_d_out$objective
 # Huzzah! The harvest function works as well as the constraint, which puts an upper bound essentially on it 
 
-benefits_fct <- function(choice, Hd_fct, constraintd_fct, discount, period, beta, Pi_s){
+harvest_ssf <- function(choice, int_state, p, c_s, q, r, K, discount, period, proportion) {
+  
+  benefits=vector(mode="numeric", length=0)
+  state=vector(mode="numeric",length=0)
+  
+  rho=1/(1+discount)
+  
+  state[1]=int_state
+  benefits[1]=p*choice[1] - (c_s*((choice[1]/(q*state[1]))^2))
+  
+  for(i in 2:period) {
+    
+    state[i]=state[i-1]+(state[i-1]*r*(1-(state[i-1]/K)))-choice[i-1]
+    benefits[i]=p*choice[i] - (c_s*((choice[i]/(q*state[i]))^2))
+  }
+  
+  t=seq(from=0, to=period-1)
+  pv=rho^t*benefits
+  npv=sum(pv)
+  
+  return(-npv)
+}
+
+constraint_ssf <- function(choice, int_state, p, c_s, q, r, K, discount, period, proportion) {
+  
+  state=vector(mode="numeric", length=0)
+  const=vector(mode="numeric", length=0)
+  
+  state[1]=int_state
+  const[1]=choice[1]-state[1]
+  
+  for(i in 2:period){
+    
+    state[i]=state[i-1]+(state[i-1]*r*(1-(state[i-1]/K)))-choice[i-1]
+    const[i]=choice[i]-(state[i]*(1-proportion))
+  }
+  return(const)
+}
+
+benefits_fct <- function(choice, Hd_fct, constraintd_fct, Hs_fct, constraints_fct, discount, period, beta, Pi_s){
   
   benefits=vector(mode="numeric",length=0)
   
   rho=1/(1+discount)
   
   for(i in 1:period) {
-    benefits[i]=beta*Pi_s + (1-beta)*choice*(nloptr(x0 = rep(500000, period),eval_f = Hd_fct,lb = rep(0, period),opts = options,eval_g_ineq = constraintd_fct,int_state = 60000000,alpha = choice,p = 1.3,c_d = 0.63,q = 0.01,r = 0.45,K = 100000000,discount = 0.05,period = 50)$objective[i])
+    benefits[i]=((1-beta)*choice*(nloptr(x0 = rep(500000, period),eval_f = Hd_fct,lb = rep(0, period),opts = options,eval_g_ineq = constraintd_fct,int_state = 60000000,alpha = choice,p = 1.3,c_d = 0.63,q = 0.01,r = 0.45,K = 100000000,discount = 0.05,period = 50,proportion=0.6)$objective)) + (beta*(nloptr(x0=rep(8000000, period),eval_f=Hs_fct,lb=rep(0,period),opts=options,eval_g_ineq=constraints_fct,int_state=60000000,p=1.3,c_s=0.91,q=0.01,r=0.45,K=100000000, discount=0.05,period=50,proportion=0.6)$objective))
   }
   
   t=seq(from=0, to=period-1)
@@ -141,6 +182,8 @@ benefits_out=nloptr(x0=0.2,
                     ub = 1,
                     Hd_fct = harvest_dwf,
                     constraintd_fct = constraint_dwf,
+                    Hs_fct = harvest_ssf,
+                    constraints_fct = constraint_ssf,
                     discount = 0.05,
                     period = 50,
                     beta = 0.5,
@@ -148,6 +191,20 @@ benefits_out=nloptr(x0=0.2,
                     )
 benefits_out$solution
 -benefits_out$objective
+
+I=60000000
+K=100000000
+Is=I*0.6
+Id=I*0.4
+Ks=K*0.6
+Kd=K*0.4
+r=0.45
+overall=I+(0.45*I*(1-(I/K)))
+S1=Is+(0.45*Is*(1-(Is/Ks)))
+D1=Id+(0.45*Id*(1-(Id/Kd)))
+S1+D1 == overall
+S1
+D1
 ```
 
 
