@@ -47,23 +47,45 @@ DD Notes: Adding in another version that optimizes effort, and including a table
 - the state is the fish stock. In this case we are using a simple schaefer model for stock that both fishers are fishing from
 - the yield is the product of the stock and the effort for each fisher.
   * but does this capture that the catch of one impacts the catch of the other?
-- Simple individual prfit functions are used, optimization is done on the sum of the two functions. 
+- Simple individual profit functions are used, optimization is done on the sum of the two functions. 
 
 ### Formulas for Biomass and Benefits 
 
 $$
 \mathrm{X_{t+1,D}=X_{t,D}+rX_{t,D}(1-\frac{X_{t,D}}{K_{D}}) \\
-\text{Where: } X_{0,D}=BI*k_{D} \\
-\Pi_{D}=\sum_{t=0}^{T} \rho^{t} (p (1-\alpha) Y_{t,D} - c_{D} (\frac{Y_{t,D}}{q_DX_{t,D}})) \\
+\text{Where: } X_{0,D}=BI*k_{D} \\ 
+\text{   and   } ~~~~~K_{D}=K*k_{D} \\ ~ \\
+\Pi_{D}=\sum_{t=0}^{T} \rho^{t} (p (1-\alpha) Y_{t,D} - c_{D} [\frac{Y_{t,D}}{q_DX_{t,D}}]^{2}) \\
 \text{Subject to: } Y_{t,D} \lt X_{t,D}}
 $$
 
 $$
 \mathrm{X_{t+1,S}=X_{t,S}+rX_{t,S}(1-\frac{X_{t,S}}{K_{S}}) \\
-\text{Where: } X_{0,S}=BI*k_{S} \\
-\Pi_{S}=\sum_{t=0}^{T} \rho^{t} (p (1-\alpha) Y_{t,S} - c_{S} (\frac{Y_{t,S}}{q_SX_{t,S}})) \\
+\text{Where: } X_{0,S}=BI*k_{S} \\ 
+\text{   and   } ~~~~~K_{S}=K*k_{S} \\ ~ \\
+\Pi_{S}=\sum_{t=0}^{T} \rho^{t} (p  Y_{t,S} - c_{S} [\frac{Y_{t,S}}{q_SX_{t,S}}]^2) \\
 \text{Subject to: } Y_{t,S} \lt X_{t,S}}
 $$
+
+$$
+\mathrm{BI=60000000 \\
+K = 100000000 \\
+r=0.45 \\
+k_{D}=0.4 \\
+k_{S} = 0.6 \\
+p= 1.3 \\
+c_{D}=0.63 \\
+c_{S}= 0.91 \\
+q_{D}=0.01 \\
+q_{S}=0.03 \\
+\delta = 0.05 \\
+\rho = \frac{1}{1+\delta} \\
+\alpha_{bau}=0.10 \\
+\alpha_{opt}=0.507 \\
+\beta = 0.7
+}
+$$
+
 
 $$
 \mathrm{NPV=\beta\Pi_{S}+(1-\beta) \alpha \Pi_D}
@@ -75,28 +97,21 @@ local_opts<-list("algorithm"="NLOPT_LN_COBYLA",xtol_rel=1e-15)
 options=list("algorithm"="NLOPT_LN_AUGLAG",xtol_rel=1e-15,maxeval=160000,"local_opts"=local_opts)
 
 harvest_dwf <- function(choice, int_state, alpha, p, c_d, q, r, Kd, discount, period, proportion) {
-  
   benefits=vector(mode="numeric", length=0)
-  # choice=vector(mode="numeric",length=0)
   state=vector(mode="numeric",length=0)
   
   state[1]=int_state*proportion
   benefits[1]=(p*(1-alpha)*choice[1])-(c_d*((choice[1]/(q*state[1]))^2))
-  
   rho=1/(1+discount)
   
   for(i in 2:period){
-    
     state[i]=state[i-1]+(state[i-1]*r*(1-(state[i-1]/Kd)))-choice[i-1]
-    
     benefits[i]=(p*((1-alpha)*choice[i]))-(c_d*((choice[i]/(q*state[i]))^2))
   }
   
   t=seq(from=0,to=period-1)
-  
   pv=rho^t*benefits
   npv=sum(pv)
-  
   return(-npv)
 }
 
@@ -113,7 +128,6 @@ constraint_dwf <- function(choice, int_state, alpha, p, c_d, q, r, Kd, discount,
     state[i]=state[i-1]+(state[i-1]*r*(1-(state[i-1]/Kd)))-choice[i-1]
     const[i]=choice[i]-state[i]
   }
-  
   return(const)
 }
 
@@ -122,13 +136,11 @@ harvest_ssf <- function(choice, int_state, p, c_s, q, r, Ks, discount, period, p
   benefits=vector(mode="numeric", length=0)
   state=vector(mode="numeric",length=0)
   
-  rho=1/(1+discount)
-  
   state[1]=int_state*proportion
   benefits[1]=p*choice[1] - (c_s*((choice[1]/(q*state[1]))^2))
+  rho=1/(1+discount)
   
   for(i in 2:period) {
-    
     state[i]=state[i-1]+(state[i-1]*r*(1-(state[i-1]/Ks)))-choice[i-1]
     benefits[i]=p*choice[i] - (c_s*((choice[i]/(q*state[i]))^2))
   }
@@ -136,7 +148,6 @@ harvest_ssf <- function(choice, int_state, p, c_s, q, r, Ks, discount, period, p
   t=seq(from=0, to=period-1)
   pv=rho^t*benefits
   npv=sum(pv)
-  
   return(-npv)
 }
 
@@ -164,10 +175,8 @@ benefits_fct <- function(choice, Hd_fct, constraintd_fct, Hs_fct, constraints_fc
   rho=1/(1+discount)
   
   
-    benefits=((1-beta)*choice*-(nloptr(x0 = rep(500000, period),eval_f = Hd_fct,lb = rep(0, period),opts = options,eval_g_ineq = constraintd_fct,int_state = 60000000,alpha = choice,p = 1.3,c_d = 0.63,q = 0.01,r = 0.45, Kd=100000000*0.5,discount = 0.05,period = 50,proportion=0.5)$objective)) + (beta*-(nloptr(x0=rep(500000, period),eval_f=Hs_fct,lb=rep(0,period),opts=options,eval_g_ineq=constraints_fct,int_state=60000000,p=1.3,c_s=0.91,q=0.01,r=0.45,Ks=100000000*0.5, discount=0.05,period=50,proportion=0.5)$objective))
+    benefits=(beta*-(nloptr(x0=rep(500000, period),eval_f=Hs_fct,lb=rep(0,period),opts=options,eval_g_ineq=constraints_fct, int_state=60000000,p=1.3,c_s=0.91,q=0.03,r=0.45,Ks=100000000*0.6, discount=0.05,period=20,proportion=0.6)$objective)) + ((1-beta)*choice*-(nloptr(x0 = rep(500000, period),eval_f = Hd_fct,lb = rep(0, period),opts = options,eval_g_ineq = constraintd_fct,int_state = 60000000,alpha = choice,p = 1.3,c_d = 0.63,q = 0.01,r = 0.45, Kd=100000000*0.4,discount = 0.05,period = 20,proportion=0.4)$objective)) 
   
-  # t=seq(from=0, to=period-1)
-  # pv=rho^t*benefits
   npv=sum(benefits)
   
   return(-npv)
@@ -183,12 +192,12 @@ benefits_out=nloptr(x0=0.2,
                     Hs_fct = harvest_ssf,
                     constraints_fct = constraint_ssf,
                     discount = 0.05,
-                    period = 50,
+                    period = 20,
                     beta = 0.7
                     )
 benefits_out$solution
 -benefits_out$objective
-# 0.7*(-H_s_out$objective) + (1-0.7)*(benefits_out$solution*(-H_d_out$objective))
+0.7*(-H_s_out$objective) + (1-0.7)*(benefits_out$solution*(-H_d_out$objective))
 # I=60000000
 # K=100000000
 # Is=I*0.6
@@ -214,10 +223,10 @@ p = 1.3
 c_d = 0.63
 q = 0.01
 r = 0.45
-Kd=100000000*0.5
+Kd=100000000*0.4
 discount = 0.05
-period = 50
-proportiond=0.5
+period = 20
+proportiond=0.4
 
 H_d_out = nloptr(
   x0 = rep(500000, period),
@@ -231,10 +240,10 @@ H_d_out = nloptr(
   c_d = 0.63,
   q = 0.01,
   r = 0.45,
-  Kd = 100000000*0.5,
+  Kd = 100000000*0.4,
   discount = 0.05,
-  period = 50,
-  proportion=0.5
+  period = 20,
+  proportion=0.4
 )
 H_d_out$solution
 -H_d_out$objective
@@ -306,10 +315,10 @@ H_s_out = nloptr(
   c_s = 0.91,
   q = 0.03,
   r = 0.45,
-  Ks = 100000000 * 0.5,
+  Ks = 100000000*0.6,
   discount = 0.05,
-  period = 50,
-  proportion = 0.5
+  period = 20,
+  proportion = 0.6
 )
 
 H_s_out$solution
@@ -320,10 +329,10 @@ p = 1.3
 c_s = 0.91
 q = 0.03
 r = 0.45
-Ks = 100000000 * 0.5
+Ks = 100000000 * 0.6
 discount = 0.05
-period = 50
-proportions = 0.5
+period = 20
+proportions = 0.6
 
 ssf_df = ssf_table(choice=H_s_out$solution, int_state=int_state, p=p, c_s=c_s, q=q, r=r, Ks=Ks, discount=discount, period=period, proportion=proportions) %>% 
   mutate(Fleet = "SSF")
@@ -336,24 +345,158 @@ total_table= dwf_df %>%
 
 ```{r}
 yield_plot=ggplot(total_table) +
-  geom_point(aes(x=Time, y=Yield, color = Fleet), alpha=0.5) +
-  geom_line(aes(x=Time, y=Biomass)) +
-  labs(title="SSF Yield and DWF Yield over Time") + 
+  geom_line(aes(x=Time, y=Yield, color = Fleet), alpha=0.5) +
+  scale_y_continuous(
+    labels = scales::label_number(scale = 1e-6, suffix = "M"),
+    name = "Yield (Millions of Kg)") +
+  labs(title="Optimal Harvest by Fleet when alpha = 0.5") + 
+  scale_color_manual(values = c("gold3", "forestgreen")) +
   theme_bw()
 yield_plot
 
-H_s_out$solution
-H_d_out$solution
+# ggsave(filename = "optimized_yield_plot.jpg", plot = yield_plot, path=here::here("Plots"))
+
+
+# H_s_out$solution
+# H_d_out$solution
 
 biomass_plot=ggplot(total_table) +
-  geom_line(aes(x=Time, y=Biomass))
+  geom_line(aes(x=Time, y=Biomass)) +
+  scale_y_continuous(
+    labels = scales::label_number(scale = 1e-6, suffix = "M"),
+    name = "Stock Biomass (Millions of Kg)") +
+  labs(title="Optimal Stock Biomass when alpha = 0.5") + 
+  theme_bw()
 biomass_plot
 
+# ggsave(filename = "optimized_biomass_plot.jpg", plot = biomass_plot, path=here::here("Plots"))
+
 benefits_plot=ggplot(total_table) +
-  geom_point(aes(x=Time, y=PV, color = Fleet), alpha=0.5) +
-  labs(title="SSF Benefits and DWF Benefits over Time") + 
+  geom_line(aes(x=Time, y=PV, color = Fleet), alpha=0.5) +
+  scale_y_continuous(
+    labels = scales::label_number(scale = 1e-6, prefix = "$", suffix = "M"),
+    name = "Present Value (Millions of Dollars)") +
+  labs(title="Optimal Discounted Benefits by Fleet when alpha = 0.5") + 
+  scale_color_manual(values = c("gold3", "forestgreen")) +
   theme_bw()
 benefits_plot
+# ggsave(filename = "optimized_pv_plot.jpg", plot = benefits_plot, path=here::here("Plots"))
 ```
 
+## Plotting BAU outcome 
+
+```{r}
+######################### DWF ##########################
+int_state = 60000000
+p = 1.3
+c_d = 0.63
+q = 0.01
+r = 0.45
+Kd=100000000*0.5
+discount = 0.05
+period = 20
+proportiond=0.5
+
+H_d_og = nloptr(
+  x0 = rep(500000, period),
+  eval_f = harvest_dwf,
+  lb = rep(0, period),
+  opts = options,
+  eval_g_ineq = constraint_dwf,
+  int_state = 60000000,
+  alpha = 0.1,
+  p = 1.3,
+  c_d = 0.63,
+  q = 0.01,
+  r = 0.45,
+  Kd = 100000000*0.4,
+  discount = 0.05,
+  period = 20,
+  proportion=0.4
+)
+H_d_og$solution
+-H_d_og$objective
+
+dwf_df_og = dwf_table(choice=H_d_og$solution, int_state=int_state, alpha=0.1, p=p, c_d=c_d, q=q, r=r, Kd=Kd, discount=discount,period=period,proportion=proportiond) %>% 
+  mutate(Fleet = "DWF")
+
+######################### SSF ##########################
+H_s_og = nloptr(
+  x0 = rep(1000000, period),
+  eval_f = harvest_ssf,
+  lb = rep(0, period),
+  opts = options,
+  eval_g_ineq = constraint_ssf,
+  int_state = 60000000,
+  p = 1.3,
+  c_s = 0.91,
+  q = 0.03,
+  r = 0.45,
+  Ks = 100000000*0.6,
+  discount = 0.05,
+  period = 20,
+  proportion = 0.6
+)
+
+H_s_og$solution
+-H_s_og$objective
+
+int_state = 60000000
+p = 1.3
+c_s = 0.91
+q = 0.03
+r = 0.45
+Ks = 100000000*0.6
+discount = 0.05
+period = 20
+proportions = 0.6
+
+ssf_df_og = ssf_table(choice=H_s_og$solution, int_state=int_state, p=p, c_s=c_s, q=q, r=r, Ks=Ks, discount=discount, period=period, proportion=proportions) %>% 
+  mutate(Fleet = "SSF")
+
+total_table_og = dwf_df_og %>% 
+  rbind(ssf_df_og)
+
+################## NAFAA #######################
+
+0.7*(-H_s_og$objective) + (1-0.7)*(0.1*(-H_d_og$objective))
+
+################### PLOTs ######################
+yield_plot_og=ggplot(total_table_og) +
+  geom_line(aes(x=Time, y=Yield, color = Fleet), alpha=0.5) +
+  scale_y_continuous(
+    labels = scales::label_number(scale = 1e-6, suffix = "M"),
+    name = "Yield (Millions of Kg)") +
+  labs(title="Harvest by Fleet when alpha = 0.1") + 
+  scale_color_manual(values = c("gold3", "forestgreen")) +
+  theme_bw()
+yield_plot_og
+yield_plot
+
+# ggsave(filename = "original_yield_plot.jpg", plot = yield_plot_og, path=here::here("Plots"))
+
+
+biomass_plot_og=ggplot(total_table_og) +
+  geom_line(aes(x=Time, y=Biomass)) +
+  scale_y_continuous(
+    labels = scales::label_number(scale = 1e-6, suffix = "M"),
+    name = "Stock Biomass (Millions of Kg)") +
+  labs(title="Stock Biomass when alpha = 0.1") + 
+  theme_bw()
+biomass_plot_og
+biomass_plot
+# ggsave(filename = "original_biomass_plot.jpg", plot = biomass_plot_og, path=here::here("Plots"))
+
+benefits_plot_og=ggplot(total_table_og) +
+  geom_line(aes(x=Time, y=PV, color = Fleet), alpha=0.5) +
+  scale_y_continuous(
+    labels = scales::label_number(scale = 1e-6, prefix = "$", suffix = "M"),
+    name = "Present Value (Millions of Dollars)") +
+  labs(title="Discounted Benefits by Fleet when alpha = 0.1") + 
+  scale_color_manual(values = c("gold3", "forestgreen")) +
+  theme_bw()
+benefits_plot_og
+benefits_plot
+# ggsave(filename = "original_pv_plot.jpg", plot = benefits_plot_og, path=here::here("Plots"))
+```
 
