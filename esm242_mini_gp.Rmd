@@ -51,24 +51,25 @@ DD Notes: Adding in another version that optimizes effort, and including a table
 
 ### Formulas for Biomass and Benefits 
 
-$$
-\mathrm{X_{t+1,D}=X_{t,D}+rX_{t,D}(1-\frac{X_{t,D}}{K_{D}}) \\
+\begin{align}
+X_{t+1,D}=X_{t,D}+rX_{t,D}(1-\frac{X_{t,D}}{K_{D}}) \\
 \text{Where: } X_{0,D}=BI*k_{D} \\ 
 \text{   and   } ~~~~~K_{D}=K*k_{D} \\ ~ \\
 \Pi_{D}=\sum_{t=0}^{T} \rho^{t} (p (1-\alpha) Y_{t,D} - c_{D} [\frac{Y_{t,D}}{q_DX_{t,D}}]^{2}) \\
-\text{Subject to: } Y_{t,D} \lt X_{t,D}}
-$$
+\text{Subject to: } Y_{t,D} \lt X_{t,D}
+\end{align}
 
-$$
-\mathrm{X_{t+1,S}=X_{t,S}+rX_{t,S}(1-\frac{X_{t,S}}{K_{S}}) \\
+
+\begin{align}
+X_{t+1,S}=X_{t,S}+rX_{t,S}(1-\frac{X_{t,S}}{K_{S}}) \\
 \text{Where: } X_{0,S}=BI*k_{S} \\ 
 \text{   and   } ~~~~~K_{S}=K*k_{S} \\ ~ \\
 \Pi_{S}=\sum_{t=0}^{T} \rho^{t} (p  Y_{t,S} - c_{S} [\frac{Y_{t,S}}{q_SX_{t,S}}]^2) \\
-\text{Subject to: } Y_{t,S} \lt X_{t,S}}
-$$
+\text{Subject to: } Y_{t,S} \lt X_{t,S}
+\end{align}
 
-$$
-\mathrm{BI=60000000 \\
+\begin{align}
+BI=60000000 \\
 K = 100000000 \\
 r=0.45 \\
 k_{D}=0.4 \\
@@ -83,14 +84,12 @@ q_{S}=0.03 \\
 \alpha_{bau}=0.10 \\
 \alpha_{opt}=0.507 \\
 \beta = 0.7
-}
-$$
+\end{align}
 
 
-$$
+\begin{align}
 \mathrm{NPV=\beta\Pi_{S}+(1-\beta) \alpha \Pi_D}
-
-$$
+\end{align}
 
 ```{r}
 local_opts<-list("algorithm"="NLOPT_LN_COBYLA",xtol_rel=1e-15)
@@ -197,7 +196,7 @@ benefits_out=nloptr(x0=0.2,
                     )
 benefits_out$solution
 -benefits_out$objective
-0.7*(-H_s_out$objective) + (1-0.7)*(benefits_out$solution*(-H_d_out$objective))
+# 0.7*(-H_s_out$objective) + (1-0.7)*(benefits_out$solution*(-H_d_out$objective))
 # I=60000000
 # K=100000000
 # Is=I*0.6
